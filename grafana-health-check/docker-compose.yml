@@ -1,0 +1,59 @@
+services:
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    restart: always
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./infra/prometheus:/etc/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: always
+    ports:
+      - '3000:3000'
+    depends_on:
+      - prometheus
+    volumes:
+      - ./infra/grafana:/etc/grafana/provisioning/
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_BASIC_ENABLED=false
+
+  blackbox_exporter:
+    image: prom/blackbox-exporter:v0.26.0
+    ports:
+      - '9115:9115'
+    volumes:
+      - ./infra/blackbox/blackbox.yml:/etc/blackboxexporter/config.yml
+    command:
+      - --config.file=/etc/blackboxexporter/config.yml
+    cap_add:
+      - CAP_NET_RAW
+
+  node_exporter:
+    image: prom/node-exporter:v1.9.0
+    restart: unless-stopped
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)' 
+    expose:
+      - 9100  
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '8001:8001'  
+    volumes:
+      - ./index.js:/app/index.js
